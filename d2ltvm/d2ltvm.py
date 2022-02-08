@@ -301,7 +301,7 @@ def pool_mxnet(pool_type, data, out, k, p, s):
 
 
 # Defined in file: ./chapter_common_operators/batch_norm.md
-import topi
+import tvm.topi as topi
 
 def batch_norm(c, n, eps=1e-5):
     """batch normalization
@@ -453,14 +453,14 @@ def np_matmul_timer(n):
 # Defined in file: ./chapter_cpu_schedules/matmul.md
 def bench_matmul_tvm(func, sizes, target):
     def workload(nrepeats):
-        timer = mod.time_evaluator(mod.entry_name, ctx=ctx, number=nrepeats)
+        timer = mod.time_evaluator(mod.entry_name, dev=dev, number=nrepeats)
         return timer(a, b, c).mean * nrepeats
     times = []
     for n in sizes:
         s, (A, B, C) = func(int(n))
         mod = tvm.build(s, [A, B, C], target)
-        ctx = tvm.context(target, 0)
-        a, b, c = d2ltvm.get_abc((n, n), lambda x: tvm.nd.array(x, ctx=ctx))
+        dev = tvm.cpu()
+        a, b, c = d2ltvm.get_abc((n, n), lambda x: tvm.nd.array(x))
         times.append(d2ltvm.bench_workload(workload))
     return 2 * sizes**3 / 1e9 / np.array(times)
 
@@ -506,16 +506,16 @@ def bench_conv_mxnet(sizes, ctx='cpu'):
 # Defined in file: ./chapter_cpu_schedules/conv.md
 def bench_conv_tvm(func, sizes, target):
     def workload(nrepeats):
-        timer = mod.time_evaluator(mod.entry_name, ctx=ctx, number=nrepeats)
+        timer = mod.time_evaluator(mod.entry_name, dev=dev, number=nrepeats)
         return timer(x, k, y).mean * nrepeats
     gflops, times = [], []
     for (c, n, k) in sizes:
         args = c, c, n, k, (k-1)//2, 1 # oc, ic, n, k, p, s
         s, (X, K, Y) = func(*args)
         mod = tvm.build(s, [X, K, Y], target)
-        ctx = tvm.context(target, 0)
+        dev = tvm.cpu()
         x, k, y = d2ltvm.get_conv_data(
-            *args, lambda x: tvm.nd.array(x, ctx=ctx))
+            *args, lambda x: tvm.nd.array(x))
         times.append(d2ltvm.bench_workload(workload))
         gflops.append(conv_gflop(*args))
     return np.array(gflops) / np.array(times)
